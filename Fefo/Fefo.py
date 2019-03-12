@@ -149,6 +149,11 @@ record = record(video_capture) if RECORD else None
 while True:
     # grab a single frame of video
     ret, frame = video_capture.read()
+    
+    cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("Video",
+                          cv2.WND_PROP_FULLSCREEN,
+                          cv2.WINDOW_FULLSCREEN)
 
     # resize frame of video to 1/4 size for faster face recognition processing
     special_number = 5
@@ -276,8 +281,6 @@ while True:
 
             cv2.putText(frame, label, (startX, y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-    frame = cv2.resize(frame, (0, 0), fx=1.8, fy=1.8)
 
     # display the resulting image
     cv2.imshow('Video', frame)
