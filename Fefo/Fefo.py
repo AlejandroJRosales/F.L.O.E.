@@ -149,10 +149,10 @@ record = record(video_capture) if RECORD else None
 while True:
     # grab a single frame of video
     ret, frame = video_capture.read()
-    frame = cv2.resize(frame, (0, 0), fx=0.8, fy=0.8)
 
     # resize frame of video to 1/4 size for faster face recognition processing
-    small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+    special_number = 5
+    small_frame = cv2.resize(frame, (0, 0), fx=1/special_number, fy=1/special_number)
 
     # convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
@@ -191,10 +191,10 @@ while True:
     index = 0
     for (top, right, bottom, left), name in zip(face_locations, face_names):
         # scale back up face locations since the frame we detected in was scaled to 1/4 size
-        top *= 4
-        right *= 4
-        bottom *= 4
-        left *= 4
+        top *= special_number
+        right *= special_number
+        bottom *= special_number
+        left *= special_number
 
         # draw a box around the face
         cv2.rectangle(frame, (left, top), (right, bottom), face_bounding_box_colors[index], 1)
@@ -227,8 +227,8 @@ while True:
             for facial_feature in facial_features:
                 for i in range(len(face_landmarks[facial_feature]) - 1):
                     lineThickness = 2
-                    top = face_landmarks[facial_feature][i][0] * 4, face_landmarks[facial_feature][i][1] * 4
-                    bottom = face_landmarks[facial_feature][i + 1][0] * 4, face_landmarks[facial_feature][i + 1][1] * 4
+                    top = face_landmarks[facial_feature][i][0] * special_number, face_landmarks[facial_feature][i][1] * special_number
+                    bottom = face_landmarks[facial_feature][i + 1][0] * special_number, face_landmarks[facial_feature][i + 1][1] * special_number
                     cv2.line(frame, top, bottom, face_bounding_box_colors[index2], lineThickness)
             index2 += 1
         except IndexError:
@@ -276,6 +276,8 @@ while True:
 
             cv2.putText(frame, label, (startX, y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    frame = cv2.resize(frame, (0, 0), fx=1.8, fy=1.8)
 
     # display the resulting image
     cv2.imshow('Video', frame)
