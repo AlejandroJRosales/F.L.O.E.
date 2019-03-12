@@ -31,9 +31,9 @@ class Emotions:
         # starting lists for calculating modes
         self.emotion_window = []
 
-    def emotions(self, x, y):
+    def emotions(self, x, y, gray_image, frame):
         faces = self.face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5,
-                                              minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
+                                                   minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
 
         for face_coordinates in faces:
 
@@ -105,9 +105,9 @@ def object_detection():
     # initialize the list of class labels MobileNet SSD was trained to
     # detect, then generate a set of bounding box face_bounding_box_colors for each class
     obj_classes = ["background", "aeroplane", "bicycle", "bird", "boat",
-               "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
-               "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
-               "sofa", "train", "tvmonitor"]
+                   "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+                   "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
+                   "sofa", "train", "tvmonitor"]
     obj_bounding_box_colors = np.random.uniform(0, 255, size=(len(obj_classes), 3))
 
     # load our serialized model from disk
@@ -119,186 +119,192 @@ def object_detection():
     return obj_classes, obj_bounding_box_colors, net
 
 
-def record(video_capture):
+def get_record(video_capture):
     fourcc = cv2.VideoWriter_fourcc(*'DIVX')
     name = datetime.datetime.now().strftime("%Y-%m-%d %H.%M.%S")
-    out = cv2.VideoWriter("recordings_db/" + name + '.mkv', fourcc, 4, (int(video_capture.get(3)), int(video_capture.get(4))))
+    out = cv2.VideoWriter("recordings_db/" + name + '.mkv', fourcc, 4,
+                          (int(video_capture.get(3)), int(video_capture.get(4))))
 
     return out
 
-# record video capture if true
-RECORD = False
 
-# initialize some variables
-emotions = Emotions()
-obj_classes, obj_bounding_box_colors, net = object_detection()
-known_face_names, known_face_encodings = get_face_encodings()
-face_locations = []
-face_encodings = []
-face_names = []
-face_bounding_box_colors = []
-process_this_frame = True
-s = time.time()
-fps = FPS().start()
+def main():
+    # record video capture if true
+    RECORD = False
 
-
-# get a reference to webcam #0 (the default one)
-print("[INFO] Starting video stream...")
-video_capture = cv2.VideoCapture(0)
-record = record(video_capture) if RECORD else None
-while True:
-    # grab a single frame of video
-    ret, frame = video_capture.read()
-    
-    frame = cv2.flip(frame, 1)
-    
-    cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty("Video",
-                          cv2.WND_PROP_FULLSCREEN,
-                          cv2.WINDOW_FULLSCREEN)
-
-    # resize frame of video to 1/4 size for faster face recognition processing
+    # initialize some variables
+    emotions = Emotions()
+    obj_classes, obj_bounding_box_colors, net = object_detection()
+    known_face_names, known_face_encodings = get_face_encodings()
+    face_locations = []
+    face_names = []
+    face_bounding_box_colors = []
+    process_this_frame = True
+    fps = FPS().start()
     special_number = 5
-    small_frame = cv2.resize(frame, (0, 0), fx=1/special_number, fy=1/special_number)
 
-    # convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
-    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+    # get a reference to webcam #0 (the default one)
+    print("[INFO] Starting video stream...")
+    video_capture = cv2.VideoCapture(0)
+    record = get_record(video_capture) if RECORD else None
+    while True:
+        # grab a single frame of video
+        ret, frame = video_capture.read()
 
-    # convert the image from BGR color to gray for emotion recognition
-    gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = cv2.flip(frame, 1)
 
-    # facial landmarks print
-    face_landmarks_list = face_recognition.face_landmarks(rgb_small_frame)
+        cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("Video",
+                              cv2.WND_PROP_FULLSCREEN,
+                              cv2.WINDOW_FULLSCREEN)
 
-    # only process every other frame of video to save time
-    match = [False]
-    if process_this_frame:
-        # find all the faces and face encodings in the current frame of video
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+        # resize frame of video to 1/4 size for faster face recognition processing
+        small_frame = cv2.resize(frame, (0, 0), fx=1 / special_number, fy=1 / special_number)
 
-        face_names = []
-        face_bounding_box_colors = []
-        for face_encoding in face_encodings:
-            # see if the face is a match for the known face(s)
-            name = "Unknown"
-            color = (0, 0, 255)
-            for i in range(len(known_face_encodings)):
-                match = face_recognition.compare_faces(known_face_encodings[i], face_encoding)
-                if True in match:
-                    name = known_face_names[i]
-                    color = (0, 128, 0)
+        # convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
+        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-            face_bounding_box_colors.append(color)
-            face_names.append(name)
+        # convert the image from BGR color to gray for emotion recognition
+        emotion_small_frame = cv2.resize(frame, (0, 0), fx=1 / 2, fy=1 / 2)
+        gray_image = cv2.cvtColor(emotion_small_frame, cv2.COLOR_BGR2GRAY)
 
-    process_this_frame = not process_this_frame
+        # facial landmarks print
+        face_landmarks_list = face_recognition.face_landmarks(rgb_small_frame)
 
-    # display the results
-    index = 0
-    for (top, right, bottom, left), name in zip(face_locations, face_names):
-        # scale back up face locations since the frame we detected in was scaled to 1/4 size
-        top *= special_number
-        right *= special_number
-        bottom *= special_number
-        left *= special_number
+        # only process every other frame of video to save time
+        if process_this_frame:
+            # find all the faces and face encodings in the current frame of video
+            face_locations = face_recognition.face_locations(rgb_small_frame)
+            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
-        # draw a box around the face
-        cv2.rectangle(frame, (left, top), (right, bottom), face_bounding_box_colors[index], 1)
+            face_names = []
+            face_bounding_box_colors = []
+            for face_encoding in face_encodings:
+                # see if the face is a match for the known face(s)
+                name = "Unknown"
+                color = (0, 0, 255)
+                for i in range(len(known_face_encodings)):
+                    match = face_recognition.compare_faces(known_face_encodings[i], face_encoding)
+                    if True in match:
+                        name = known_face_names[i]
+                        color = (0, 128, 0)
 
-        # draw a label
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(frame, name, (right + 6, top - 12), font, 1.0, face_bounding_box_colors[index], 2)
+                face_bounding_box_colors.append(color)
+                face_names.append(name)
 
-        emotions.emotions(left, top) if len(face_names) < 2 else None
+        process_this_frame = not process_this_frame
 
-        index += 1
+        # display the results
+        index = 0
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
+            # scale back up face locations since the frame we detected in was scaled to 1/4 size
+            top *= special_number
+            right *= special_number
+            bottom *= special_number
+            left *= special_number
 
-    index2 = 0
-    for face_landmarks in face_landmarks_list:
+            # draw a box around the face
+            cv2.rectangle(frame, (left, top), (right, bottom), face_bounding_box_colors[index], 1)
 
-        # print the location of each facial feature in this image
-        facial_features = [
-            'chin',
-            'left_eyebrow',
-            'right_eyebrow',
-            'nose_bridge',
-            'nose_tip',
-            'left_eye',
-            'right_eye',
-            'top_lip',
-            'bottom_lip'
-        ]
+            # draw a label
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(frame, name, (right + 6, top - 12), font, 1.0, face_bounding_box_colors[index], 2)
 
-        try:
-            for facial_feature in facial_features:
-                for i in range(len(face_landmarks[facial_feature]) - 1):
-                    lineThickness = 2
-                    top = face_landmarks[facial_feature][i][0] * special_number, face_landmarks[facial_feature][i][1] * special_number
-                    bottom = face_landmarks[facial_feature][i + 1][0] * special_number, face_landmarks[facial_feature][i + 1][1] * special_number
-                    cv2.line(frame, top, bottom, face_bounding_box_colors[index2], lineThickness)
-            index2 += 1
-        except IndexError:
-            pass
+            emotions.emotions(left, top, gray_image, frame) if len(face_names) < 2 else None
 
-    # bbject detection
-    (h, w) = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
-                                 0.007843, (300, 300), 127.5)
+            index += 1
 
-    # pass the blob through the network and obtain the detections and
-    # predictions
-    net.setInput(blob)
-    detections = net.forward()
+        index2 = 0
+        for face_landmarks in face_landmarks_list:
 
-    # loop over the detections
-    for i in np.arange(0, detections.shape[2]):
-        # extract the confidence (i.e., probability) associated with
-        # the prediction
-        confidence = detections[0, 0, i, 2]
+            # print the location of each facial feature in this image
+            facial_features = [
+                'chin',
+                'left_eyebrow',
+                'right_eyebrow',
+                'nose_bridge',
+                'nose_tip',
+                'left_eye',
+                'right_eye',
+                'top_lip',
+                'bottom_lip'
+            ]
 
-        # filter out weak detections by ensuring the `confidence` is
-        # greater than the minimum confidence
-        if confidence > .25:
-            # extract the index of the class label from the
-            # `detections`, then compute the (x, y)-coordinates of
-            # the bounding box for the object
-            idx = int(detections[0, 0, i, 1])
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-            (startX, startY, endX, endY) = box.astype("int")
+            try:
+                for facial_feature in facial_features:
+                    for i in range(len(face_landmarks[facial_feature]) - 1):
+                        lineThickness = 2
+                        top = face_landmarks[facial_feature][i][0] * special_number, face_landmarks[facial_feature][i][
+                            1] * special_number
+                        bottom = face_landmarks[facial_feature][i + 1][0] * special_number, \
+                                 face_landmarks[facial_feature][i + 1][1] * special_number
+                        cv2.line(frame, top, bottom, face_bounding_box_colors[index2], lineThickness)
+                index2 += 1
+            except IndexError:
+                pass
 
-            # draw the prediction on the frame
-            label = "{}: {:.2f}%".format(obj_classes[idx],
-                                         confidence * 100)
+        # bbject detection
+        (h, w) = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
+                                     0.007843, (300, 300), 127.5)
 
-            if obj_classes[idx] == "person":
-                color = (128, 0, 128)
+        # pass the blob through the network and obtain the detections and
+        # predictions
+        net.setInput(blob)
+        detections = net.forward()
 
-            else:
-                color = obj_bounding_box_colors[idx]
+        # loop over the detections
+        for i in np.arange(0, detections.shape[2]):
+            # extract the confidence (i.e., probability) associated with
+            # the prediction
+            confidence = detections[0, 0, i, 2]
 
-            cv2.rectangle(frame, (startX, startY), (endX, endY),
-                          color, 2)
-            y = startY - 15 if startY - 15 > 15 else startY + 15
+            # filter out weak detections by ensuring the `confidence` is
+            # greater than the minimum confidence
+            if confidence > .25:
+                # extract the index of the class label from the
+                # `detections`, then compute the (x, y)-coordinates of
+                # the bounding box for the object
+                idx = int(detections[0, 0, i, 1])
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
 
-            cv2.putText(frame, label, (startX, y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                # draw the prediction on the frame
+                label = "{}: {:.2f}%".format(obj_classes[idx],
+                                             confidence * 100)
 
-    # display the resulting image
-    cv2.imshow('Video', frame)
+                if obj_classes[idx] == "person":
+                    color = (128, 0, 128)
 
-    if RECORD:
-        record.write(frame)
+                else:
+                    color = obj_bounding_box_colors[idx]
 
-    fps.update()
+                cv2.rectangle(frame, (startX, startY), (endX, endY),
+                              color, 2)
+                y = startY - 15 if startY - 15 > 15 else startY + 15
 
-    # hit 'q' on the keyboard to quit!
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+                cv2.putText(frame, label, (startX, y),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-fps.stop()
-print("[INFO] Elapsed time: {:.2f}".format(fps.elapsed()))
-print("[INFO] Approx. FPS: {:.2f}".format(fps.fps()))
+        # display the resulting image
+        cv2.imshow('Video', frame)
 
-# out.release()
-cv2.destroyAllWindows()
+        if RECORD:
+            record.write(frame)
+
+        fps.update()
+
+        # hit 'q' on the keyboard to quit!
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    fps.stop()
+    print("[INFO] Elapsed time: {:.2f}".format(fps.elapsed()))
+    print("[INFO] Approx. FPS: {:.2f}".format(fps.fps()))
+
+    # out.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    main()
