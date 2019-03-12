@@ -165,8 +165,7 @@ def main():
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
         # convert the image from BGR color to gray for emotion recognition
-        emotion_small_frame = cv2.resize(frame, (0, 0), fx=1 / 2, fy=1 / 2)
-        gray_image = cv2.cvtColor(emotion_small_frame, cv2.COLOR_BGR2GRAY)
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # facial landmarks print
         face_landmarks_list = face_recognition.face_landmarks(rgb_small_frame)
