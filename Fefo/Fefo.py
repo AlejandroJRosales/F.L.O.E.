@@ -150,6 +150,8 @@ while True:
     # grab a single frame of video
     ret, frame = video_capture.read()
     
+    frame = cv2.flip(frame, 1)
+    
     cv2.namedWindow("Video", cv2.WINDOW_NORMAL)
     cv2.setWindowProperty("Video",
                           cv2.WND_PROP_FULLSCREEN,
