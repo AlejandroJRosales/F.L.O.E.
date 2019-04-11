@@ -1,18 +1,19 @@
-import datetime
-from imutils.video import FPS
-import face_recognition
 import cv2
-import time
+import datetime
 import numpy as np
-from keras.models import load_model
+import face_recognition
 from statistics import mode
+from imutils.video import FPS
+from keras.models import load_model
 from utils.datasets import get_labels
 from utils.inference import apply_offsets
 from utils.preprocessor import preprocess_input
 
 
 class Emotions:
+    """Emotions class"""
     def __init__(self):
+        print("[INFO] Loading emotions_models...")
         # parameters for loading data and images
         self.emotion_model_path = './models/emotion_model.hdf5'
         self.emotion_labels = get_labels('fer2013')
@@ -32,6 +33,7 @@ class Emotions:
         self.emotion_window = []
 
     def emotions(self, x, y, gray_image, frame):
+        """Classify emotions of faces in frame"""
         faces = self.face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5,
                                                    minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
 
@@ -79,7 +81,7 @@ class Emotions:
 
 
 def get_face_encodings():
-    print("[INFO] Fetching images...")
+    """Encode faces using face_recognition module"""
     known_face_names = [
         "Alejandro",
         "Chelsey",
@@ -102,8 +104,8 @@ def get_face_encodings():
 
 
 def object_detection():
+    """Creates array of objects for detection and loads the object detection model"""
     # initialize the list of class labels MobileNet SSD was trained to
-    # detect, then generate a set of bounding box face_bounding_box_colors for each class
     obj_classes = ["background", "aeroplane", "bicycle", "bird", "boat",
                    "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
                    "dog", "horse", "motorbike", "person", "pottedplant", "sheep",
@@ -111,7 +113,7 @@ def object_detection():
     obj_bounding_box_colors = np.random.uniform(0, 255, size=(len(obj_classes), 3))
 
     # load our serialized model from disk
-    print("[INFO] Loading model...")
+    print("[INFO] Loading real_time_object_detection_db models...")
     prototxt = "real_time_object_detection_db/MobileNetSSD_deploy.prototxt.txt"
     model = "real_time_object_detection_db/MobileNetSSD_deploy.caffemodel"
     net = cv2.dnn.readNetFromCaffe(prototxt, model)
@@ -120,6 +122,7 @@ def object_detection():
 
 
 def get_record(video_capture):
+    """Initialize necessary variables to record"""
     fourcc = cv2.VideoWriter_fourcc(*'DIVX')
     name = datetime.datetime.now().strftime("%Y-%m-%d %H.%M.%S")
     out = cv2.VideoWriter("recordings_db/" + name + '.mkv', fourcc, 4,
@@ -170,6 +173,7 @@ def main():
         # facial landmarks print
         face_landmarks_list = face_recognition.face_landmarks(rgb_small_frame)
 
+        """Here starts naming known and unknown faces and drawing bounded boxes around those faces"""
         # only process every other frame of video to save time
         if process_this_frame:
             # find all the faces and face encodings in the current frame of video
@@ -213,6 +217,7 @@ def main():
 
             index += 1
 
+        """Here it starts detecting and outlining facial landmarks on each face"""
         index2 = 0
         for face_landmarks in face_landmarks_list:
 
@@ -242,6 +247,7 @@ def main():
             except IndexError:
                 pass
 
+        """Here it starts detecting objects and drawing bounding boxes around them"""
         # bbject detection
         (h, w) = frame.shape[:2]
         blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
@@ -285,7 +291,7 @@ def main():
                 cv2.putText(frame, label, (startX, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        # display the resulting image
+        """Here the resulting images are displayed"""
         cv2.imshow('Video', frame)
 
         if RECORD:
