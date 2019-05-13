@@ -1,4 +1,5 @@
 import cv2
+import psutil
 import datetime
 import numpy as np
 import face_recognition
@@ -95,10 +96,10 @@ def get_face_encodings():
     for name in known_face_names:
         # Load a second sample picture and learn how to recognize it.
         folder = "faces_db/"
-        print("\tEncoding " + name + ".jpg")
+        print(f"\tEncoding {name}.jpg")
         known_face_encodings.append(
             face_recognition.face_encodings(face_recognition.load_image_file(folder + name + ".jpg")))
-        print("\t" + name + " encoded")
+        print(f"\t{name} encoded")
 
     return known_face_names, known_face_encodings
 
@@ -143,8 +144,14 @@ def main():
     face_names = []
     face_bounding_box_colors = []
     process_this_frame = True
+    cpu_usage = []
+    cpu_usage_percent = 0
     fps = FPS().start()
     special_number = 5
+    object_detection_on = False
+    bounding_box_faces_on = True
+    emotion_detection_on = True
+    facial_landmarks_on = True
 
     # get a reference to webcam #0 (the default one)
     print("[INFO] Starting video stream...")
@@ -174,138 +181,171 @@ def main():
         face_landmarks_list = face_recognition.face_landmarks(rgb_small_frame)
 
         """Here starts naming known and unknown faces and drawing bounded boxes around those faces"""
-        # only process every other frame of video to save time
-        if process_this_frame:
-            # find all the faces and face encodings in the current frame of video
+        if bounding_box_faces_on:
+            # only process every other frame of video to save time
+            if process_this_frame:
+                # find all the faces and face encodings in the current frame of video
+                face_locations = face_recognition.face_locations(rgb_small_frame)
+                face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+
+                face_names = []
+                face_bounding_box_colors = []
+                for face_encoding in face_encodings:
+                    # see if the face is a match for the known face(s)
+                    name = "Unknown"
+                    color = (0, 0, 255)
+                    for i in range(len(known_face_encodings)):
+                        match = face_recognition.compare_faces(known_face_encodings[i], face_encoding)
+                        if True in match:
+                            name = known_face_names[i]
+                            color = (0, 128, 0)
+
+                    face_bounding_box_colors.append(color)
+                    face_names.append(name)
+
+            process_this_frame = not process_this_frame
+
+            # display the results
+            index = 0
+            for (top, right, bottom, left), name in zip(face_locations, face_names):
+                # scale back up face locations since the frame we detected in was scaled to 1/4 size
+                top *= special_number
+                right *= special_number
+                bottom *= special_number
+                left *= special_number
+
+                # draw a box around the face
+                cv2.rectangle(frame, (left, top), (right, bottom), face_bounding_box_colors[index], 1)
+
+                # draw a label
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                cv2.putText(frame, name, (right + 6, top - 12), font, 1.0, face_bounding_box_colors[index], 2)
+
+                index += 1
+
+        """Here we detect and show emotional state of face"""
+        if emotion_detection_on:
             face_locations = face_recognition.face_locations(rgb_small_frame)
-            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+            for (top, right, bottom, left) in face_locations:
+                # scale back up face locations since the frame we detected in was scaled to 1/4 size
+                top *= special_number
+                right *= special_number
+                bottom *= special_number
+                left *= special_number
 
-            face_names = []
-            face_bounding_box_colors = []
-            for face_encoding in face_encodings:
-                # see if the face is a match for the known face(s)
-                name = "Unknown"
-                color = (0, 0, 255)
-                for i in range(len(known_face_encodings)):
-                    match = face_recognition.compare_faces(known_face_encodings[i], face_encoding)
-                    if True in match:
-                        name = known_face_names[i]
-                        color = (0, 128, 0)
-
-                face_bounding_box_colors.append(color)
-                face_names.append(name)
-
-        process_this_frame = not process_this_frame
-
-        # display the results
-        index = 0
-        for (top, right, bottom, left), name in zip(face_locations, face_names):
-            # scale back up face locations since the frame we detected in was scaled to 1/4 size
-            top *= special_number
-            right *= special_number
-            bottom *= special_number
-            left *= special_number
-
-            # draw a box around the face
-            cv2.rectangle(frame, (left, top), (right, bottom), face_bounding_box_colors[index], 1)
-
-            # draw a label
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(frame, name, (right + 6, top - 12), font, 1.0, face_bounding_box_colors[index], 2)
-
-            emotions.emotions(left, top, gray_image, frame) if len(face_names) < 2 else None
-
-            index += 1
+                emotions.emotions(left, top, gray_image, frame) if len(face_names) < 2 else None
 
         """Here it starts detecting and outlining facial landmarks on each face"""
-        index2 = 0
-        for face_landmarks in face_landmarks_list:
+        if facial_landmarks_on:
+            index2 = 0
+            for face_landmarks in face_landmarks_list:
 
-            # print the location of each facial feature in this image
-            facial_features = [
-                'chin',
-                'left_eyebrow',
-                'right_eyebrow',
-                'nose_bridge',
-                'nose_tip',
-                'left_eye',
-                'right_eye',
-                'top_lip',
-                'bottom_lip'
-            ]
+                # print the location of each facial feature in this image
+                facial_features = [
+                    'chin',
+                    'left_eyebrow',
+                    'right_eyebrow',
+                    'nose_bridge',
+                    'nose_tip',
+                    'left_eye',
+                    'right_eye',
+                    'top_lip',
+                    'bottom_lip'
+                ]
 
-            try:
-                for facial_feature in facial_features:
-                    for i in range(len(face_landmarks[facial_feature]) - 1):
-                        lineThickness = 2
-                        top = face_landmarks[facial_feature][i][0] * special_number, face_landmarks[facial_feature][i][
-                            1] * special_number
-                        bottom = face_landmarks[facial_feature][i + 1][0] * special_number, \
-                                 face_landmarks[facial_feature][i + 1][1] * special_number
-                        cv2.line(frame, top, bottom, face_bounding_box_colors[index2], lineThickness)
-                index2 += 1
-            except IndexError:
-                pass
+                try:
+                    for facial_feature in facial_features:
+                        for i in range(len(face_landmarks[facial_feature]) - 1):
+                            lineThickness = 2
+                            top = face_landmarks[facial_feature][i][0] * special_number, face_landmarks[facial_feature][i][
+                                1] * special_number
+                            bottom = face_landmarks[facial_feature][i + 1][0] * special_number, \
+                                     face_landmarks[facial_feature][i + 1][1] * special_number
+                            cv2.line(frame, top, bottom, face_bounding_box_colors[index2], lineThickness)
+                    index2 += 1
+                except IndexError:
+                    pass
 
         """Here it starts detecting objects and drawing bounding boxes around them"""
-        # bbject detection
-        (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
-                                     0.007843, (300, 300), 127.5)
+        if object_detection_on:
+            (h, w) = frame.shape[:2]
+            blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
+                                         0.007843, (300, 300), 127.5)
 
-        # pass the blob through the network and obtain the detections and
-        # predictions
-        net.setInput(blob)
-        detections = net.forward()
+            # pass the blob through the network and obtain the detections and
+            # predictions
+            net.setInput(blob)
+            detections = net.forward()
 
-        # loop over the detections
-        for i in np.arange(0, detections.shape[2]):
-            # extract the confidence (i.e., probability) associated with
-            # the prediction
-            confidence = detections[0, 0, i, 2]
+            # loop over the detections
+            for i in np.arange(0, detections.shape[2]):
+                # extract the confidence (i.e., probability) associated with
+                # the prediction
+                confidence = detections[0, 0, i, 2]
 
-            # filter out weak detections by ensuring the `confidence` is
-            # greater than the minimum confidence
-            if confidence > .25:
-                # extract the index of the class label from the
-                # `detections`, then compute the (x, y)-coordinates of
-                # the bounding box for the object
-                idx = int(detections[0, 0, i, 1])
-                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                (startX, startY, endX, endY) = box.astype("int")
+                # filter out weak detections by ensuring the `confidence` is
+                # greater than the minimum confidence
+                if confidence > .25:
+                    # extract the index of the class label from the
+                    # `detections`, then compute the (x, y)-coordinates of
+                    # the bounding box for the object
+                    idx = int(detections[0, 0, i, 1])
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                    (startX, startY, endX, endY) = box.astype("int")
 
-                # draw the prediction on the frame
-                label = "{}: {:.2f}%".format(obj_classes[idx],
-                                             confidence * 100)
+                    # draw the prediction on the frame
+                    label = "{}: {:.2f}%".format(obj_classes[idx],
+                                                 confidence * 100)
 
-                if obj_classes[idx] == "person":
-                    color = (128, 0, 128)
+                    if obj_classes[idx] == "person":
+                        color = (128, 0, 128)
 
-                else:
-                    color = obj_bounding_box_colors[idx]
+                    else:
+                        color = obj_bounding_box_colors[idx]
 
-                cv2.rectangle(frame, (startX, startY), (endX, endY),
-                              color, 2)
-                y = startY - 15 if startY - 15 > 15 else startY + 15
+                    cv2.rectangle(frame, (startX, startY), (endX, endY),
+                                  color, 2)
+                    y = startY - 15 if startY - 15 > 15 else startY + 15
 
-                cv2.putText(frame, label, (startX, y),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    cv2.putText(frame, label, (startX, y),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        # CPU usage
+
+        if not process_this_frame:
+            cpu_usage_percent = psutil.cpu_percent()
+            cpu_usage.append(cpu_usage_percent)
+        cv2.putText(frame, str(f"CPU USAGE: {cpu_usage_percent}%"), (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 255, 255), 1)
 
         """Here the resulting images are displayed"""
         cv2.imshow('Video', frame)
 
+        fps.update()
+
         if RECORD:
             record.write(frame)
 
-        fps.update()
 
-        # hit 'q' on the keyboard to quit!
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Check if f,l,o,e are pressed, if so do the negation of their current state
+        k = cv2.waitKey(33)
+        if k == 102:
+            bounding_box_faces_on = not bounding_box_faces_on
+        if k == 108:
+            facial_landmarks_on = not facial_landmarks_on
+        if k == 111:
+            object_detection_on = not object_detection_on
+        if k == 101:
+            emotion_detection_on = not emotion_detection_on
+
+        # Press q to quit or 'ESC' to quit
+        if k == 113 or k == 27:
             break
 
     fps.stop()
-    print("[INFO] Elapsed time: {:.2f}".format(fps.elapsed()))
-    print("[INFO] Approx. FPS: {:.2f}".format(fps.fps()))
+    print(f"[INFO] Elapsed Time: {fps.elapsed():.2f}")
+    print(f"[INFO] Approx. FPS: {fps.fps():.2f}")
+    print(f"[INFO] Approx. Med. CPU Percent Usage: {np.median(cpu_usage):.2f}")
 
     # out.release()
     cv2.destroyAllWindows()
