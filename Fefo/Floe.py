@@ -148,6 +148,7 @@ def main():
     cpu_usage_percent = 0
     fps = FPS().start()
     special_number = 5
+    time_run_obj_detection = 0
     object_detection_on = False
     bounding_box_faces_on = True
     emotion_detection_on = True
@@ -202,8 +203,6 @@ def main():
 
                     face_bounding_box_colors.append(color)
                     face_names.append(name)
-
-            process_this_frame = not process_this_frame
 
             # display the results
             index = 0
@@ -274,8 +273,10 @@ def main():
 
             # pass the blob through the network and obtain the detections and
             # predictions
-            net.setInput(blob)
-            detections = net.forward()
+            if process_this_frame or time_run_obj_detection == 0:
+                net.setInput(blob)
+                detections = net.forward()
+                time_run_obj_detection += 1
 
             # loop over the detections
             for i in np.arange(0, detections.shape[2]):
@@ -310,8 +311,9 @@ def main():
                     cv2.putText(frame, label, (startX, y),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        # CPU usage
+        process_this_frame = not process_this_frame
 
+        # CPU usage
         if not process_this_frame:
             cpu_usage_percent = psutil.cpu_percent()
             cpu_usage.append(cpu_usage_percent)
@@ -326,20 +328,30 @@ def main():
         if RECORD:
             record.write(frame)
 
-
-        # Check if f,l,o,e are pressed, if so do the negation of their current state
         k = cv2.waitKey(33)
         if k == 102:
             bounding_box_faces_on = not bounding_box_faces_on
-        if k == 108:
+        elif k == 108:
             facial_landmarks_on = not facial_landmarks_on
-        if k == 111:
+        elif k == 111:
             object_detection_on = not object_detection_on
-        if k == 101:
+        elif k == 101:
             emotion_detection_on = not emotion_detection_on
+        elif k == 65:
+            all_on = all([bounding_box_faces_on, facial_landmarks_on, object_detection_on, emotion_detection_on])
+            if all_on:
+                bounding_box_faces_on = False
+                facial_landmarks_on = False
+                object_detection_on = False
+                emotion_detection_on = False
+            else:
+                bounding_box_faces_on = True
+                facial_landmarks_on = True
+                object_detection_on = True
+                emotion_detection_on = True
 
         # Press q to quit or 'ESC' to quit
-        if k == 113 or k == 27:
+        elif k == 113 or k == 27:
             break
 
     fps.stop()
