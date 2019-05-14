@@ -1,7 +1,7 @@
 # Floe
 F.L.O.E stands for:
 * Facial recognition
-* facial Fandmark detection
+* facial Landmark detection
 * Object recognition
 * Emotion detection. 
 
